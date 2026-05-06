@@ -99,8 +99,13 @@ function shapeRow(q, meta) {
 
 export default async function handler(req, res) {
   try {
-    const allSymbols = SYMBOLS.map((x) => x.s);
-    const symMeta = Object.fromEntries(SYMBOLS.map((x) => [x.s, x]));
+    // ?market=NASDAQ veya ?market=BIST ile filtrele (yoksa hepsi)
+    const marketFilter = (req.query.market || "").toUpperCase().trim();
+    const filteredSymbols = marketFilter
+      ? SYMBOLS.filter((x) => x.m === marketFilter)
+      : SYMBOLS;
+    const allSymbols = filteredSymbols.map((x) => x.s);
+    const symMeta = Object.fromEntries(filteredSymbols.map((x) => [x.s, x]));
 
     // 200'lük batch'ler, paralel
     const batchSize = 100;
@@ -133,6 +138,7 @@ export default async function handler(req, res) {
     res.setHeader("Access-Control-Allow-Origin", "*");
     res.status(200).json({
       asOf: new Date().toISOString(),
+      market: marketFilter || "ALL",
       count: results.length,
       requested: allSymbols.length,
       rows: results,
