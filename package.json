@@ -1,0 +1,13 @@
+{
+  "name": "pro-hisse-tarayici",
+  "version": "1.0.0",
+  "description": "NASDAQ penny + BIST sektör live screener with auto-opportunity scanner",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "deploy": "vercel --prod"
+  }
+}
