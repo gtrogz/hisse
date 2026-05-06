@@ -535,17 +535,21 @@ const GROUPS = {
 const ROWS = RAW.rows;
 const AS_OF = RAW.asOf;
 
-const KEY="screenerState_v4_nasdaq";
+const KEY="screenerState_v6_nasdaq_themes";
 const initial={market:"NASDAQ",sectors:[],watchOnly:false,gainOnly:false,near52H:false,penny:false,profit:false,buy:false,search:"",volMin:0,chgMin:-50,pxMin:0,pxMax:10000,sortKey:"ch",sortDir:"desc",theme:"light"};
 let watch=JSON.parse(localStorage.getItem("screenerWatch_v1")||"[]");
-// Eski state anahtarlarını temizle (filtreler kayıt yapmasın)
-try{localStorage.removeItem("screenerState");localStorage.removeItem("screenerState_v1");localStorage.removeItem("screenerState_v2");localStorage.removeItem("screenerState_v3");localStorage.removeItem("oppState_v2");}catch(e){}
+// Eski state anahtarlarını TAMAMEN temizle (yeni temalı yapıda geçersiz key'ler kalmasın)
+try{
+  ["screenerState","screenerState_v1","screenerState_v2","screenerState_v3","screenerState_v4","screenerState_v4_nasdaq","screenerState_v5","screenerState_v5_nasdaq",
+   "oppState","oppState_v1","oppState_v2","oppState_v3","oppState_v4"].forEach(k=>localStorage.removeItem(k));
+}catch(e){}
 let st;try{st=Object.assign({},initial,JSON.parse(localStorage.getItem(KEY)||"{}"))}catch{st=Object.assign({},initial)}
 // NASDAQ sayfası — market her zaman NASDAQ
 if(st.market!=="NASDAQ"){st.market="NASDAQ"}
-// Sektör seçimleri arasında BIST/... veya geçersiz olanları temizle
+// Sektör validation: sadece şu an var olan AI/QC/BT/CE temalarına izin ver
+const VALID_SECTORS = new Set(["NASDAQ/AI","NASDAQ/QC","NASDAQ/BT","NASDAQ/CE"]);
 if(Array.isArray(st.sectors)&&st.sectors.length){
-  st.sectors=st.sectors.filter(k=>String(k).startsWith("NASDAQ/"));
+  st.sectors=st.sectors.filter(k=>VALID_SECTORS.has(k));
 }else{st.sectors=[]}
 function save(){localStorage.setItem(KEY,JSON.stringify(st))}
 function saveWatch(){localStorage.setItem("screenerWatch_v1",JSON.stringify(watch))}
@@ -1258,10 +1262,11 @@ async function refreshLive() {
           av: f.av != null ? f.av : row.av,
           sec: f.sec || row.sec,
           ind: f.ind || row.ind,
-          n: f.n || row.n,
-          // Eğer yeni API'de m/g geldiyse onu kabul et (metadata güncel)
-          m: f.m || row.m,
-          g: f.g || row.g,
+          n: (f.n && f.n !== f.s) ? f.n : (row.n || f.s),
+          // m/g LOCAL'da kalsın — eski deploy'daki yanlış metadata üzerine yazmasın
+          // (aynı sembolde sayfanın bildiği sektör otorite kabul edilir)
+          // m: row.m,
+          // g: row.g,
         });
         updated++;
       }
