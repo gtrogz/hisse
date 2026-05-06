@@ -538,10 +538,12 @@ let watch=JSON.parse(localStorage.getItem("screenerWatch_v1")||"[]");
 // Eski state anahtarlarını temizle (filtreler kayıt yapmasın)
 try{localStorage.removeItem("screenerState");localStorage.removeItem("screenerState_v1");localStorage.removeItem("screenerState_v2");localStorage.removeItem("screenerState_v3");localStorage.removeItem("oppState_v2");}catch(e){}
 let st;try{st=Object.assign({},initial,JSON.parse(localStorage.getItem(KEY)||"{}"))}catch{st=Object.assign({},initial)}
-// BIST kaldırıldı — eski state'te "ALL" veya "BIST" varsa NASDAQ'a çek
+// NASDAQ sayfası — market her zaman NASDAQ
 if(st.market!=="NASDAQ"){st.market="NASDAQ"}
-// Sektör seçimleri arasında BIST var ise temizle
-if(Array.isArray(st.sectors)&&st.sectors.length){st.sectors=st.sectors.filter(k=>!String(k).startsWith("BIST/"))}
+// Sektör seçimleri arasında BIST/... veya geçersiz olanları temizle
+if(Array.isArray(st.sectors)&&st.sectors.length){
+  st.sectors=st.sectors.filter(k=>String(k).startsWith("NASDAQ/"));
+}else{st.sectors=[]}
 function save(){localStorage.setItem(KEY,JSON.stringify(st))}
 function saveWatch(){localStorage.setItem("screenerWatch_v1",JSON.stringify(watch))}
 
@@ -555,7 +557,7 @@ function rangeBar(px,lo,hi,cls=""){if(px==null||lo==null||hi==null||hi<=lo)retur
 
 // Defensive: BIST hisseleri her zaman .IS suffix'i taşır. Yanlış metadata'ya karşı sigorta.
 function realMarket(r){return r.s && r.s.endsWith(".IS") ? "BIST" : "NASDAQ"}
-function applyFilters(){const q=st.search.trim().toLowerCase();return ROWS.filter(r=>{const rm=realMarket(r);if(rm!==r.m){r.m=rm}if(st.market!=="ALL"&&rm!==st.market)return false;if(st.sectors.length&&!st.sectors.includes(r.m+"/"+r.g))return false;if(st.watchOnly&&!watch.includes(r.s))return false;if(st.gainOnly&&r.ch<=0)return false;if(st.near52H){if(!(r.wh&&r.p>=r.wh*0.85))return false}if(st.penny&&(r.p<0.10||r.p>1.50||r.m!=="NASDAQ"))return false;if(st.profit){const f=FUND[r.s];if(!f||f.ni==null||f.ni<=0)return false}if(st.buy){const f=FUND[r.s];const rec=(f&&f.rec||"").toLowerCase();if(!rec.includes("buy"))return false}if(q){const blob=(r.s+" "+r.n+" "+groupMeta(r.m,r.g).tr+" "+groupMeta(r.m,r.g).en).toLowerCase();if(!blob.includes(q))return false}if(r.v<st.volMin)return false;if(r.ch<st.chgMin)return false;if(r.p<st.pxMin)return false;if(r.p>st.pxMax)return false;return true})}
+function applyFilters(){const q=st.search.trim().toLowerCase();return ROWS.filter(r=>{const rm=realMarket(r);if(rm!==r.m){r.m=rm}if(st.market!=="ALL"&&rm!==st.market)return false;if(st.sectors.length&&!st.sectors.includes(rm+"/"+r.g))return false;if(st.watchOnly&&!watch.includes(r.s))return false;if(st.gainOnly&&r.ch<=0)return false;if(st.near52H){if(!(r.wh&&r.p>=r.wh*0.85))return false}if(st.penny&&(r.p<0.10||r.p>1.50||r.m!=="NASDAQ"))return false;if(st.profit){const f=FUND[r.s];if(!f||f.ni==null||f.ni<=0)return false}if(st.buy){const f=FUND[r.s];const rec=(f&&f.rec||"").toLowerCase();if(!rec.includes("buy"))return false}if(q){const blob=(r.s+" "+r.n+" "+groupMeta(r.m,r.g).tr+" "+groupMeta(r.m,r.g).en).toLowerCase();if(!blob.includes(q))return false}if(r.v<st.volMin)return false;if(r.ch<st.chgMin)return false;if(r.p<st.pxMin)return false;if(r.p>st.pxMax)return false;return true})}
 function sortRows(arr){const k=st.sortKey,dir=st.sortDir==="asc"?1:-1;return arr.slice().sort((a,b)=>{let av=a[k],bv=b[k];if(k==="pos52"){av=a.wh&&a.wl?(a.p-a.wl)/(a.wh-a.wl):0;bv=b.wh&&b.wl?(b.p-b.wl)/(b.wh-b.wl):0}else if(k==="mc"){av=(FUND[a.s]||{}).mc||0;bv=(FUND[b.s]||{}).mc||0}else if(k==="ob"){av=calcOverbought(a,FUND[a.s]||{}).score;bv=calcOverbought(b,FUND[b.s]||{}).score}if(typeof av==="string")return av.localeCompare(bv)*dir;return((av??-Infinity)-(bv??-Infinity))*dir})}
 
 function renderSectors(){const el=document.getElementById("sectors");const groups=GROUPS.NASDAQ;const rowsByMkt=ROWS.filter(r=>realMarket(r)==="NASDAQ");el.innerHTML=groups.map(g=>{const subset=rowsByMkt.filter(r=>r.g===g.k);const cnt=subset.length;if(cnt===0)return "";const avg=cnt?subset.reduce((s,r)=>s+r.ch,0)/cnt:0;const up=subset.filter(r=>r.ch>0).length;const key="NASDAQ/"+g.k;const active=st.sectors.includes(key);return`<div class="sec-card ${active?'active':''}" data-key="${key}"><div class="strip" style="background:${g.c}"></div><div class="head"><span class="tag" style="background:${g.c}22;color:${g.c}">${g.k}</span><span style="font-size:9px;color:var(--fg-faint);text-transform:uppercase">${active?'aktif':''}</span></div><div class="name">${g.tr}</div><div class="desc">${g.en}</div><div class="stats"><div><div class="stat-num">${cnt}</div><div class="stat-lbl">Hisse</div></div><div><div class="stat-num ${avg>=0?'up':'down'}">${pct(avg,1)}</div><div class="stat-lbl">Ort.</div></div><div><div class="stat-num">${up}</div><div class="stat-lbl">Yükselen</div></div></div></div>`}).join("");el.querySelectorAll(".sec-card").forEach(c=>{c.onclick=()=>{const k=c.dataset.key;const idx=st.sectors.indexOf(k);if(idx>=0)st.sectors.splice(idx,1);else st.sectors.push(k);save();render()}})}
@@ -575,7 +577,7 @@ const COLS=[
   {k:"ob",t:"Teknik",cls:"r",sortable:true,render:r=>{const ob=calcOverbought(r,FUND[r.s]||{});return obBadgeHTML(ob,{compact:true})}},
 ];
 function renderHead(){const tr=document.getElementById("thead");tr.innerHTML=COLS.map(col=>{const isActive=col.k===st.sortKey;const arrow=isActive?(st.sortDir==="asc"?" ↑":" ↓"):"";return`<th class="${col.cls} ${col.sortable?'sortable':''} ${isActive?'active-sort':''}" ${col.w?'style="width:'+col.w+'px"':''} ${col.sortable?'data-sort="'+col.k+'"':''}>${col.t}${arrow}</th>`}).join("");tr.querySelectorAll("th[data-sort]").forEach(th=>{th.onclick=()=>{const k=th.dataset.sort;if(st.sortKey===k)st.sortDir=st.sortDir==="asc"?"desc":"asc";else{st.sortKey=k;st.sortDir="desc"}save();render()}})}
-function renderTable(rows){const tb=document.getElementById("tbody");if(!rows.length){tb.innerHTML=`<tr><td colspan="${COLS.length}" style="padding:40px;text-align:center;color:var(--fg-faint)">Filtrelere uyan sonuç yok.</td></tr>`;return}tb.innerHTML=rows.map(r=>`<tr data-sym="${r.s}">${COLS.map(c=>`<td class="${c.cls}">${c.render(r)}</td>`).join("")}</tr>`).join("");tb.querySelectorAll("tr").forEach(tr=>{tr.onclick=e=>{if(e.target.closest(".star-btn"))return;openDetail(tr.dataset.sym)}});tb.querySelectorAll(".star-btn").forEach(b=>{b.onclick=e=>{e.stopPropagation();const s=b.dataset.w;const i=watch.indexOf(s);if(i>=0)watch.splice(i,1);else watch.push(s);saveWatch();render()}})}
+function renderTable(rows){const tb=document.getElementById("tbody");if(!rows.length){tb.innerHTML=`<tr><td colspan="${COLS.length}" style="padding:40px;text-align:center;color:var(--fg-faint)"><div style="font-size:14px;margin-bottom:10px">Filtrelere uyan sonuç yok</div><button onclick="document.getElementById('qReset').click()" class="btn" style="padding:6px 14px;font-size:12px">↺ Filtreleri Temizle</button></td></tr>`;return}tb.innerHTML=rows.map(r=>`<tr data-sym="${r.s}">${COLS.map(c=>`<td class="${c.cls}">${c.render(r)}</td>`).join("")}</tr>`).join("");tb.querySelectorAll("tr").forEach(tr=>{tr.onclick=e=>{if(e.target.closest(".star-btn"))return;openDetail(tr.dataset.sym)}});tb.querySelectorAll(".star-btn").forEach(b=>{b.onclick=e=>{e.stopPropagation();const s=b.dataset.w;const i=watch.indexOf(s);if(i>=0)watch.splice(i,1);else watch.push(s);saveWatch();render()}})}
 
 // === DETAIL ===
 let qChart=null;
@@ -856,7 +858,7 @@ function render(){
   document.getElementById("asOfLabel").textContent=`Snapshot · ${d.toLocaleString("tr-TR")} · Yahoo Finance`;
 }
 
-document.querySelectorAll(".tab").forEach(t=>t.onclick=()=>{st.market=t.dataset.mkt;st.sectors=[];save();render()});
+document.querySelectorAll(".tab").forEach(t=>t.onclick=()=>{if(!t.dataset.mkt)return;/* anchor link, atla */ st.market=t.dataset.mkt;st.sectors=[];save();render()});
 document.getElementById("qSearch").oninput=e=>{st.search=e.target.value;document.getElementById("qSearchClear").style.display=e.target.value?"flex":"none";save();render()};
 document.getElementById("qSearchClear").onclick=()=>{const i=document.getElementById("qSearch");i.value="";st.search="";document.getElementById("qSearchClear").style.display="none";save();render();i.focus()};
 // Filtreleri temizle butonu
