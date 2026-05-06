@@ -563,7 +563,7 @@ function realMarket(r){return r.s && r.s.endsWith(".IS") ? "BIST" : "NASDAQ"}
 function applyFilters(){const q=st.search.trim().toLowerCase();return ROWS.filter(r=>{const rm=realMarket(r);if(rm!==r.m){r.m=rm}if(st.market!=="ALL"&&rm!==st.market)return false;if(st.sectors.length&&!st.sectors.includes(rm+"/"+r.g))return false;if(st.watchOnly&&!watch.includes(r.s))return false;if(st.gainOnly&&r.ch<=0)return false;if(st.near52H){if(!(r.wh&&r.p>=r.wh*0.85))return false}if(st.penny&&(r.p<0.10||r.p>1.50||r.m!=="NASDAQ"))return false;if(st.profit){const f=FUND[r.s];if(!f||f.ni==null||f.ni<=0)return false}if(st.buy){const f=FUND[r.s];const rec=(f&&f.rec||"").toLowerCase();if(!rec.includes("buy"))return false}if(q){const blob=(r.s+" "+r.n+" "+groupMeta(r.m,r.g).tr+" "+groupMeta(r.m,r.g).en).toLowerCase();if(!blob.includes(q))return false}if(r.v<st.volMin)return false;if(r.ch<st.chgMin)return false;if(r.p<st.pxMin)return false;if(r.p>st.pxMax)return false;return true})}
 function sortRows(arr){const k=st.sortKey,dir=st.sortDir==="asc"?1:-1;return arr.slice().sort((a,b)=>{let av=a[k],bv=b[k];if(k==="pos52"){av=a.wh&&a.wl?(a.p-a.wl)/(a.wh-a.wl):0;bv=b.wh&&b.wl?(b.p-b.wl)/(b.wh-b.wl):0}else if(k==="mc"){av=(FUND[a.s]||{}).mc||0;bv=(FUND[b.s]||{}).mc||0}else if(k==="ob"){av=calcOverbought(a,FUND[a.s]||{}).score;bv=calcOverbought(b,FUND[b.s]||{}).score}if(typeof av==="string")return av.localeCompare(bv)*dir;return((av??-Infinity)-(bv??-Infinity))*dir})}
 
-function renderSectors(){const el=document.getElementById("sectors");const groups=GROUPS.NASDAQ;const rowsByMkt=ROWS.filter(r=>realMarket(r)==="NASDAQ");el.innerHTML=groups.map(g=>{const subset=rowsByMkt.filter(r=>r.g===g.k);const cnt=subset.length;if(cnt===0)return "";const avg=cnt?subset.reduce((s,r)=>s+r.ch,0)/cnt:0;const up=subset.filter(r=>r.ch>0).length;const key="NASDAQ/"+g.k;const active=st.sectors.includes(key);return`<div class="sec-card ${active?'active':''}" data-key="${key}"><div class="strip" style="background:${g.c}"></div><div class="head"><span class="tag" style="background:${g.c}22;color:${g.c}">${g.k}</span><span style="font-size:9px;color:var(--fg-faint);text-transform:uppercase">${active?'aktif':''}</span></div><div class="name">${g.tr}</div><div class="desc">${g.en}</div><div class="stats"><div><div class="stat-num">${cnt}</div><div class="stat-lbl">Hisse</div></div><div><div class="stat-num ${avg>=0?'up':'down'}">${pct(avg,1)}</div><div class="stat-lbl">Ort.</div></div><div><div class="stat-num">${up}</div><div class="stat-lbl">Yükselen</div></div></div></div>`}).join("");el.querySelectorAll(".sec-card").forEach(c=>{c.onclick=()=>{const k=c.dataset.key;const idx=st.sectors.indexOf(k);if(idx>=0)st.sectors.splice(idx,1);else st.sectors.push(k);save();render()}})}
+function renderSectors(){const el=document.getElementById("sectors");const groups=GROUPS.NASDAQ;const rowsByMkt=ROWS.filter(r=>realMarket(r)==="NASDAQ");el.innerHTML=groups.map(g=>{const subset=rowsByMkt.filter(r=>r.g===g.k);const cnt=subset.length;if(cnt===0)return "";const avg=cnt?subset.reduce((s,r)=>s+r.ch,0)/cnt:0;const up=subset.filter(r=>r.ch>0).length;const key="NASDAQ/"+g.k;const active=st.sectors.includes(key);return`<div class="sec-card ${active?'active':''}" data-key="${key}"><div class="strip" style="background:${g.c}"></div><div class="head"><span class="tag" style="background:${g.c}22;color:${g.c}">${g.k}</span><span style="font-size:9px;color:var(--fg-faint);text-transform:uppercase">${active?'aktif':''}</span></div><div class="name">${g.tr}</div><div class="desc">${g.en}</div><div class="stats"><div><div class="stat-num">${cnt}</div><div class="stat-lbl">Hisse</div></div><div><div class="stat-num ${avg>=0?'up':'down'}">${pct(avg,1)}</div><div class="stat-lbl">Ort.</div></div><div><div class="stat-num">${up}</div><div class="stat-lbl">Yükselen</div></div></div></div>`}).join("");el.querySelectorAll(".sec-card").forEach(c=>{c.onclick=()=>{const k=c.dataset.key;const idx=st.sectors.indexOf(k);if(idx>=0)st.sectors.splice(idx,1);else st.sectors.push(k);save();render();/* Tabloya kaydır */setTimeout(()=>{const tbl=document.getElementById("tbl");if(tbl)tbl.scrollIntoView({behavior:"smooth",block:"start"})},80)}})}
 function renderHeatmap(){const el=document.getElementById("heatmap");const rows=ROWS.filter(r=>st.market==="ALL"||realMarket(r)===st.market).sort((a,b)=>b.ch-a.ch);el.innerHTML=rows.map(r=>{const c=r.ch;const intensity=Math.min(1,Math.abs(c)/8);const col=c>=0?`rgba(16,185,129,${0.15+intensity*0.65})`:`rgba(220,38,38,${0.15+intensity*0.65})`;const fg=Math.abs(c)>5?"#fff":(c>=0?"#065f46":"#991b1b");return`<div class="hm-cell" style="background:${col};color:${fg}" title="${r.s} · ${pct(c)}" data-sym="${r.s}"><span>${r.s.replace(".IS","")}</span><span class="pct">${pct(c,1)}</span></div>`}).join("");el.querySelectorAll(".hm-cell").forEach(c=>{c.onclick=()=>openDetail(c.dataset.sym)})}
 
 const COLS=[
@@ -1059,9 +1059,9 @@ const CRITERIA = [
   // 4) ROE (sadece snapshot)
   {k:"roe", label:"ROE +", tip:"Özsermaye kârlılığı pozitif",
     test:(r,f)=>f.roe!=null && f.roe>0},
-  // 5) Mantıklı F/K (canlı, herkeste var) — yeni: 0 < pe < 50 ise pas
-  {k:"pe", label:"Makul F/K", tip:"F/K pozitif ve 50 altı (aşırı pahalı değil)",
-    test:(r,f)=>{const pe=(r.pe!=null?r.pe:f.pe);return pe!=null && pe>0 && pe<50}},
+  // 5) Mantıklı F/K (canlı, herkeste var) — 0 < pe < 80 ise pas (büyük cap'ler için 80'e gevşek)
+  {k:"pe", label:"Makul F/K", tip:"F/K pozitif ve 80 altı",
+    test:(r,f)=>{const pe=(r.pe!=null?r.pe:f.pe);return pe!=null && pe>0 && pe<80}},
   // 6) Büyük şirket / yeterli mc (canlı, herkeste var)
   {k:"mc", label:"Yeterli Büyüklük", tip:"Piyasa değeri 100M üstü",
     test:(r,f)=>{const mc=(r.mc!=null?r.mc:f.mc);return mc!=null && mc>=100_000_000}},
@@ -1138,7 +1138,21 @@ function renderOpps() {
   document.getElementById("oppCount").textContent = scored.length;
   const el = document.getElementById("oppGrid");
   if (!scored.length) {
-    el.innerHTML = `<div class="opp-empty" style="grid-column:1/-1">Filtreye uyan fırsat yok. <br><b>Min puanı düşürmeyi</b> veya <b>max fiyatı yükseltmeyi</b> dene.</div>`;
+    // Toplam pool ve neden eridi kontrol et
+    const poolSize = pool.length;
+    const allScored = pool.map(r => ({score: scoreRow(r).score, ob: calcOverbought(r, FUND[r.s]||{}).score, fr: calcFreshness(FUND[r.s]||{}).cls}));
+    const passScore = allScored.filter(x => x.score >= oppSt.minScore).length;
+    const passOb = allScored.filter(x => x.ob <= oppSt.maxOb).length;
+    const passFresh = oppSt.freshOnly ? allScored.filter(x => x.fr === "fr-ok").length : poolSize;
+    const maxScore = Math.max(0, ...allScored.map(x => x.score));
+    el.innerHTML = `<div class="opp-empty" style="grid-column:1/-1">
+      <div style="font-size:14px;margin-bottom:10px">Filtreye uyan fırsat yok</div>
+      <div style="font-size:11px;margin-bottom:14px;line-height:1.6">
+        Pazar havuzu: <b>${poolSize}</b> hisse · En yüksek puan: <b>${maxScore}/10</b><br>
+        Min puan ≥${oppSt.minScore}: ${passScore} hisse · Şişmişlik ≤${oppSt.maxOb}: ${passOb} hisse${oppSt.freshOnly ? ` · Yalnız güncel: ${passFresh}` : ""}
+      </div>
+      <button onclick="oppSt.minScore=2;oppSt.maxOb=4;oppSt.maxPx=10000;oppSt.freshOnly=false;oppSave();renderOpps()" class="btn" style="padding:6px 14px;font-size:12px">↺ Filtreleri Gevşet (min 2/10)</button>
+    </div>`;
     return;
   }
 
