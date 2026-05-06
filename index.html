@@ -349,13 +349,16 @@ body.dark .sig.bad{background:rgba(248,113,113,.1);border-color:rgba(248,113,113
   <div class="opp-grid" id="oppGrid"></div>
 </div>
 
-<h3 class="section-title">Filtreler</h3>
+<h3 class="section-title" style="display:flex;align-items:center;justify-content:space-between">
+  <span>Filtreler</span>
+  <button id="qReset" class="btn" style="font-size:11px;padding:5px 12px;font-weight:600" title="Tüm filtreleri sıfırla">↺ Filtreleri Temizle</button>
+</h3>
 <div class="card" style="margin-bottom:12px">
   <div class="filters">
     <div class="field"><label>Min. Hacim <span class="range-val" id="qVolLbl">0</span></label><input type="range" id="qVol" min="0" max="100000000" step="50000" value="0"></div>
     <div class="field"><label>Min. % Değişim <span class="range-val" id="qChgLbl">−∞%</span></label><input type="range" id="qChg" min="-50" max="50" step="1" value="-50"></div>
     <div class="field"><label>Min. Fiyat <span class="range-val" id="qPxMinLbl">0</span></label><input type="range" id="qPxMin" min="0" max="50" step="0.05" value="0"></div>
-    <div class="field"><label>Max. Fiyat <span class="range-val" id="qPxMaxLbl">∞</span></label><input type="range" id="qPxMax" min="0" max="200" step="0.5" value="200"></div>
+    <div class="field"><label>Max. Fiyat <span class="range-val" id="qPxMaxLbl">∞</span></label><input type="range" id="qPxMax" min="0" max="10000" step="10" value="10000"></div>
   </div>
   <div class="toggles" id="toggles">
     <label class="tog" id="togWatch"><input type="checkbox"><span class="star">★</span> Yalnız izleme listesi</label>
@@ -529,9 +532,11 @@ const GROUPS = {
 const ROWS = RAW.rows;
 const AS_OF = RAW.asOf;
 
-const KEY="screenerState_v2";
-const initial={market:"NASDAQ",sectors:[],watchOnly:false,gainOnly:false,near52H:false,penny:false,profit:false,buy:false,search:"",volMin:0,chgMin:-50,pxMin:0,pxMax:200,sortKey:"ch",sortDir:"desc",theme:"light"};
+const KEY="screenerState_v4_nasdaq";
+const initial={market:"NASDAQ",sectors:[],watchOnly:false,gainOnly:false,near52H:false,penny:false,profit:false,buy:false,search:"",volMin:0,chgMin:-50,pxMin:0,pxMax:10000,sortKey:"ch",sortDir:"desc",theme:"light"};
 let watch=JSON.parse(localStorage.getItem("screenerWatch_v1")||"[]");
+// Eski state anahtarlarını temizle (filtreler kayıt yapmasın)
+try{localStorage.removeItem("screenerState");localStorage.removeItem("screenerState_v1");localStorage.removeItem("screenerState_v2");localStorage.removeItem("screenerState_v3");localStorage.removeItem("oppState_v2");}catch(e){}
 let st;try{st=Object.assign({},initial,JSON.parse(localStorage.getItem(KEY)||"{}"))}catch{st=Object.assign({},initial)}
 // BIST kaldırıldı — eski state'te "ALL" veya "BIST" varsa NASDAQ'a çek
 if(st.market!=="NASDAQ"){st.market="NASDAQ"}
@@ -833,7 +838,7 @@ function render(){
   document.getElementById("qVol").value=st.volMin;document.getElementById("qVolLbl").textContent=fmt(st.volMin,{abbr:true});
   document.getElementById("qChg").value=st.chgMin;document.getElementById("qChgLbl").textContent=st.chgMin<=-50?"−∞%":st.chgMin+"%";
   document.getElementById("qPxMin").value=st.pxMin;document.getElementById("qPxMinLbl").textContent=st.pxMin.toFixed(2);
-  document.getElementById("qPxMax").value=st.pxMax;document.getElementById("qPxMaxLbl").textContent=st.pxMax>=200?"∞":st.pxMax.toFixed(2);
+  document.getElementById("qPxMax").value=st.pxMax;document.getElementById("qPxMaxLbl").textContent=st.pxMax>=10000?"∞":"$"+st.pxMax.toFixed(0);
   syncTog("togWatch",st.watchOnly);syncTog("togGain",st.gainOnly);syncTog("togNear52H",st.near52H);syncTog("togPenny",st.penny);syncTog("togProfit",st.profit);syncTog("togBuy",st.buy);
   document.body.classList.toggle("dark",st.theme==="dark");
   document.getElementById("themeBtn").textContent=st.theme==="dark"?"☀":"☾";
@@ -854,6 +859,17 @@ function render(){
 document.querySelectorAll(".tab").forEach(t=>t.onclick=()=>{st.market=t.dataset.mkt;st.sectors=[];save();render()});
 document.getElementById("qSearch").oninput=e=>{st.search=e.target.value;document.getElementById("qSearchClear").style.display=e.target.value?"flex":"none";save();render()};
 document.getElementById("qSearchClear").onclick=()=>{const i=document.getElementById("qSearch");i.value="";st.search="";document.getElementById("qSearchClear").style.display="none";save();render();i.focus()};
+// Filtreleri temizle butonu
+document.getElementById("qReset").onclick=()=>{
+  // Pazar (NASDAQ/BIST) ve tema'yı koru, geri kalan her şeyi default'a çek
+  const keepMarket=st.market;
+  const keepTheme=st.theme;
+  Object.assign(st, initial);
+  st.market=keepMarket;
+  st.theme=keepTheme;
+  save();
+  render();
+};
 // Cmd/Ctrl+K ile arama kutusuna odaklan
 document.addEventListener("keydown",e=>{if((e.metaKey||e.ctrlKey)&&e.key==="k"){e.preventDefault();document.getElementById("qSearch").focus()}});
 document.getElementById("qVol").oninput=e=>{st.volMin=+e.target.value;save();render()};
