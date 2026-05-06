@@ -538,11 +538,13 @@ function groupMeta(mkt,k){return GROUPS[mkt].find(g=>g.k===k)||{tr:k,en:k,c:"#94
 function sparkSVG(arr,w=70,h=22){if(!arr||arr.length<2)return"";const min=Math.min(...arr),max=Math.max(...arr);const range=(max-min)||1;const pts=arr.map((v,i)=>{const x=(i/(arr.length-1))*(w-2)+1;const y=h-1-((v-min)/range)*(h-2);return x.toFixed(1)+","+y.toFixed(1)}).join(" ");const last=arr[arr.length-1],first=arr[0];const color=last>=first?"#10b981":"#dc2626";return`<svg class="spark" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}"><polyline fill="none" stroke="${color}" stroke-width="1.4" points="${pts}"/></svg>`}
 function rangeBar(px,lo,hi,cls=""){if(px==null||lo==null||hi==null||hi<=lo)return"—";const p=Math.max(0,Math.min(1,(px-lo)/(hi-lo)));return`<span class="range-mini ${cls}" title="${fmt(lo)} → ${fmt(hi)}"><span class="marker" style="left:${(p*100).toFixed(1)}%"></span></span>`}
 
-function applyFilters(){const q=st.search.trim().toLowerCase();return ROWS.filter(r=>{if(st.market!=="ALL"&&r.m!==st.market)return false;if(st.sectors.length&&!st.sectors.includes(r.m+"/"+r.g))return false;if(st.watchOnly&&!watch.includes(r.s))return false;if(st.gainOnly&&r.ch<=0)return false;if(st.near52H){if(!(r.wh&&r.p>=r.wh*0.85))return false}if(st.penny&&(r.p<0.10||r.p>1.50||r.m!=="NASDAQ"))return false;if(st.profit){const f=FUND[r.s];if(!f||f.ni==null||f.ni<=0)return false}if(st.buy){const f=FUND[r.s];const rec=(f&&f.rec||"").toLowerCase();if(!rec.includes("buy"))return false}if(q){const blob=(r.s+" "+r.n+" "+groupMeta(r.m,r.g).tr+" "+groupMeta(r.m,r.g).en).toLowerCase();if(!blob.includes(q))return false}if(r.v<st.volMin)return false;if(r.ch<st.chgMin)return false;if(r.p<st.pxMin)return false;if(r.p>st.pxMax)return false;return true})}
+// Defensive: BIST hisseleri her zaman .IS suffix'i taşır. Yanlış metadata'ya karşı sigorta.
+function realMarket(r){return r.s && r.s.endsWith(".IS") ? "BIST" : "NASDAQ"}
+function applyFilters(){const q=st.search.trim().toLowerCase();return ROWS.filter(r=>{const rm=realMarket(r);if(rm!==r.m){r.m=rm}if(st.market!=="ALL"&&rm!==st.market)return false;if(st.sectors.length&&!st.sectors.includes(r.m+"/"+r.g))return false;if(st.watchOnly&&!watch.includes(r.s))return false;if(st.gainOnly&&r.ch<=0)return false;if(st.near52H){if(!(r.wh&&r.p>=r.wh*0.85))return false}if(st.penny&&(r.p<0.10||r.p>1.50||r.m!=="NASDAQ"))return false;if(st.profit){const f=FUND[r.s];if(!f||f.ni==null||f.ni<=0)return false}if(st.buy){const f=FUND[r.s];const rec=(f&&f.rec||"").toLowerCase();if(!rec.includes("buy"))return false}if(q){const blob=(r.s+" "+r.n+" "+groupMeta(r.m,r.g).tr+" "+groupMeta(r.m,r.g).en).toLowerCase();if(!blob.includes(q))return false}if(r.v<st.volMin)return false;if(r.ch<st.chgMin)return false;if(r.p<st.pxMin)return false;if(r.p>st.pxMax)return false;return true})}
 function sortRows(arr){const k=st.sortKey,dir=st.sortDir==="asc"?1:-1;return arr.slice().sort((a,b)=>{let av=a[k],bv=b[k];if(k==="pos52"){av=a.wh&&a.wl?(a.p-a.wl)/(a.wh-a.wl):0;bv=b.wh&&b.wl?(b.p-b.wl)/(b.wh-b.wl):0}else if(k==="mc"){av=(FUND[a.s]||{}).mc||0;bv=(FUND[b.s]||{}).mc||0}else if(k==="ob"){av=calcOverbought(a,FUND[a.s]||{}).score;bv=calcOverbought(b,FUND[b.s]||{}).score}if(typeof av==="string")return av.localeCompare(bv)*dir;return((av??-Infinity)-(bv??-Infinity))*dir})}
 
-function renderSectors(){const el=document.getElementById("sectors");const groups=st.market==="ALL"?[...GROUPS.NASDAQ,...GROUPS.BIST]:GROUPS[st.market]||[];const rowsByMkt=ROWS.filter(r=>st.market==="ALL"||r.m===st.market);el.innerHTML=groups.map(g=>{const mkt=GROUPS.NASDAQ.includes(g)?"NASDAQ":"BIST";const subset=rowsByMkt.filter(r=>r.m===mkt&&r.g===g.k);const cnt=subset.length;const avg=cnt?subset.reduce((s,r)=>s+r.ch,0)/cnt:0;const up=subset.filter(r=>r.ch>0).length;const key=mkt+"/"+g.k;const active=st.sectors.includes(key);return`<div class="sec-card ${active?'active':''}" data-key="${key}"><div class="strip" style="background:${g.c}"></div><div class="head"><span class="tag" style="background:${g.c}22;color:${g.c}">${g.k} · ${mkt.substring(0,3)}</span><span style="font-size:9px;color:var(--fg-faint);text-transform:uppercase">${active?'aktif':''}</span></div><div class="name">${g.tr}</div><div class="desc">${g.en}</div><div class="stats"><div><div class="stat-num">${cnt}</div><div class="stat-lbl">Hisse</div></div><div><div class="stat-num ${avg>=0?'up':'down'}">${pct(avg,1)}</div><div class="stat-lbl">Ort.</div></div><div><div class="stat-num">${up}</div><div class="stat-lbl">Yükselen</div></div></div></div>`}).join("");el.querySelectorAll(".sec-card").forEach(c=>{c.onclick=()=>{const k=c.dataset.key;const idx=st.sectors.indexOf(k);if(idx>=0)st.sectors.splice(idx,1);else st.sectors.push(k);save();render()}})}
-function renderHeatmap(){const el=document.getElementById("heatmap");const rows=ROWS.filter(r=>st.market==="ALL"||r.m===st.market).sort((a,b)=>b.ch-a.ch);el.innerHTML=rows.map(r=>{const c=r.ch;const intensity=Math.min(1,Math.abs(c)/8);const col=c>=0?`rgba(16,185,129,${0.15+intensity*0.65})`:`rgba(220,38,38,${0.15+intensity*0.65})`;const fg=Math.abs(c)>5?"#fff":(c>=0?"#065f46":"#991b1b");return`<div class="hm-cell" style="background:${col};color:${fg}" title="${r.s} · ${pct(c)}" data-sym="${r.s}"><span>${r.s.replace(".IS","")}</span><span class="pct">${pct(c,1)}</span></div>`}).join("");el.querySelectorAll(".hm-cell").forEach(c=>{c.onclick=()=>openDetail(c.dataset.sym)})}
+function renderSectors(){const el=document.getElementById("sectors");const groups=st.market==="ALL"?[...GROUPS.NASDAQ,...GROUPS.BIST]:GROUPS[st.market]||[];const rowsByMkt=ROWS.filter(r=>st.market==="ALL"||realMarket(r)===st.market);el.innerHTML=groups.map(g=>{const mkt=GROUPS.NASDAQ.includes(g)?"NASDAQ":"BIST";const subset=rowsByMkt.filter(r=>r.m===mkt&&r.g===g.k);const cnt=subset.length;const avg=cnt?subset.reduce((s,r)=>s+r.ch,0)/cnt:0;const up=subset.filter(r=>r.ch>0).length;const key=mkt+"/"+g.k;const active=st.sectors.includes(key);return`<div class="sec-card ${active?'active':''}" data-key="${key}"><div class="strip" style="background:${g.c}"></div><div class="head"><span class="tag" style="background:${g.c}22;color:${g.c}">${g.k} · ${mkt.substring(0,3)}</span><span style="font-size:9px;color:var(--fg-faint);text-transform:uppercase">${active?'aktif':''}</span></div><div class="name">${g.tr}</div><div class="desc">${g.en}</div><div class="stats"><div><div class="stat-num">${cnt}</div><div class="stat-lbl">Hisse</div></div><div><div class="stat-num ${avg>=0?'up':'down'}">${pct(avg,1)}</div><div class="stat-lbl">Ort.</div></div><div><div class="stat-num">${up}</div><div class="stat-lbl">Yükselen</div></div></div></div>`}).join("");el.querySelectorAll(".sec-card").forEach(c=>{c.onclick=()=>{const k=c.dataset.key;const idx=st.sectors.indexOf(k);if(idx>=0)st.sectors.splice(idx,1);else st.sectors.push(k);save();render()}})}
+function renderHeatmap(){const el=document.getElementById("heatmap");const rows=ROWS.filter(r=>st.market==="ALL"||realMarket(r)===st.market).sort((a,b)=>b.ch-a.ch);el.innerHTML=rows.map(r=>{const c=r.ch;const intensity=Math.min(1,Math.abs(c)/8);const col=c>=0?`rgba(16,185,129,${0.15+intensity*0.65})`:`rgba(220,38,38,${0.15+intensity*0.65})`;const fg=Math.abs(c)>5?"#fff":(c>=0?"#065f46":"#991b1b");return`<div class="hm-cell" style="background:${col};color:${fg}" title="${r.s} · ${pct(c)}" data-sym="${r.s}"><span>${r.s.replace(".IS","")}</span><span class="pct">${pct(c,1)}</span></div>`}).join("");el.querySelectorAll(".hm-cell").forEach(c=>{c.onclick=()=>openDetail(c.dataset.sym)})}
 
 const COLS=[
   {k:"watch",t:"★",cls:"c",w:28,sortable:false,render:r=>`<button class="star-btn ${watch.includes(r.s)?'on':''}" data-w="${r.s}">★</button>`},
@@ -1076,9 +1078,10 @@ function renderOpps() {
 
   // Filter pool — strict by market, NO cross-market mixing
   let pool = ROWS.filter(r => {
-    if (effMkt !== "ALL" && r.m !== effMkt) return false;
+    const rm = realMarket(r);
+    if (effMkt !== "ALL" && rm !== effMkt) return false;
     // Price filter: only applies to NASDAQ (USD). BIST in TRY uses different scale, so price slider ignored.
-    if (r.m === "NASDAQ" && r.p > oppSt.maxPx) return false;
+    if (rm === "NASDAQ" && r.p > oppSt.maxPx) return false;
     return true;
   });
 
@@ -1184,7 +1187,7 @@ async function refreshLive() {
     if (!r.ok) throw new Error("HTTP " + r.status);
     const d = await r.json();
     if (!d.rows || !d.rows.length) throw new Error("No rows");
-    // Merge into existing ROWS in place: update p,prev,ch,v,dh,dl,wh,wl,sp
+    // Merge into existing ROWS in place: update p,prev,ch,v,dh,dl,wh,wl,sp,mc,pe,eps,y52,av,sec,ind
     const fresh = Object.fromEntries(d.rows.map(r => [r.s, r]));
     let updated = 0;
     for (const row of ROWS) {
@@ -1194,13 +1197,37 @@ async function refreshLive() {
           p: f.p, prev: f.prev, ch: f.ch, v: f.v,
           dh: f.dh, dl: f.dl, wh: f.wh, wl: f.wl,
           sp: f.sp || row.sp,
+          // Yeni API alanları (canlı bulk quote)
+          mc: f.mc != null ? f.mc : row.mc,
+          pe: f.pe != null ? f.pe : row.pe,
+          fpe: f.fpe != null ? f.fpe : row.fpe,
+          eps: f.eps != null ? f.eps : row.eps,
+          y52: f.y52 != null ? f.y52 : row.y52,
+          av: f.av != null ? f.av : row.av,
+          sec: f.sec || row.sec,
+          ind: f.ind || row.ind,
+          n: f.n || row.n,
+          // Eğer yeni API'de m/g geldiyse onu kabul et (metadata güncel)
+          m: f.m || row.m,
+          g: f.g || row.g,
         });
         updated++;
       }
     }
+    // YENİ HİSSELER — eski ROWS'da olmayanları ekle
+    const existing = new Set(ROWS.map(r => r.s));
+    let added = 0;
+    for (const f of d.rows) {
+      if (!existing.has(f.s)) {
+        ROWS.push(f);
+        added++;
+      }
+    }
     // Update AS_OF and re-render
     const newAsOf = new Date(d.asOf);
-    document.getElementById("asOfLabel").innerHTML = '<span style="color:#10b981">●</span> CANLI · ' + newAsOf.toLocaleString("tr-TR") + ' · ' + updated + '/' + ROWS.length + ' güncel';
+    document.getElementById("asOfLabel").innerHTML =
+      '<span style="color:#10b981">●</span> CANLI · ' + newAsOf.toLocaleString("tr-TR") +
+      ' · ' + ROWS.length + ' hisse (' + updated + ' güncellendi, ' + added + ' eklendi)';
     render();
   } catch (e) {
     lbl.textContent = orig + " (canlı yenileme başarısız)";
