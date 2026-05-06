@@ -326,12 +326,10 @@ body.dark .sig.bad{background:rgba(248,113,113,.1);border-color:rgba(248,113,113
     <div class="opp-controls">
       <div class="ctrl" style="display:none"><span class="opp-mkt-pick" id="oppMkt"><button data-m="NASDAQ" class="on">NASDAQ</button></span></div>
       <div class="ctrl"><span>Min puan:</span>
-        <input type="range" id="oppMinScore" min="4" max="10" step="1" value="7">
-        <span class="v" id="oppMinScoreLbl">7/10</span>
+        <input type="range" id="oppMinScore" min="2" max="10" step="1" value="4"><span class="v" id="oppMinScoreLbl">4/10</span>
       </div>
       <div class="ctrl"><span>Max fiyat:</span>
-        <input type="range" id="oppMaxPx" min="0.5" max="200" step="0.5" value="1.5">
-        <span class="v" id="oppMaxPxLbl">$1.50</span>
+        <input type="range" id="oppMaxPx" min="1" max="100000" step="100" value="100000"><span class="v" id="oppMaxPxLbl">∞</span>
       </div>
       <div class="ctrl" title="0=Sağlıklı · 4=Aşırı şişmiş. Sadece bu eşik ve altındaki hisseler gösterilir."><span>Max şişmişlik:</span>
         <input type="range" id="oppMaxOb" min="0" max="4" step="1" value="4">
@@ -902,13 +900,15 @@ document.addEventListener("keydown",e=>{if(e.key==="Escape")document.getElementB
 
 // ========== AUTO OPPORTUNITY SCANNER ==========
 const oppSt = (() => {
-  const def = {mkt:"NASDAQ", minScore:5, maxPx:5.0, maxOb:4, freshOnly:false};
-  try { return Object.assign({}, def, JSON.parse(localStorage.getItem("oppState_v3")||"{}")); }
+  // BIST için. minScore 4, maxPx sınırsız (TRY)
+  const def = {mkt:"BIST", minScore:4, maxPx:100000, maxOb:4, freshOnly:false};
+  try { return Object.assign({}, def, JSON.parse(localStorage.getItem("oppState_v5_bist")||"{}")); }
   catch { return def; }
 })();
+try{["oppState_v2","oppState_v3","oppState_v4"].forEach(k=>localStorage.removeItem(k))}catch(e){}
 // BIST sayfası, mkt her zaman BIST
 oppSt.mkt = "BIST";
-function oppSave() { localStorage.setItem("oppState_v3", JSON.stringify(oppSt)); }
+function oppSave() { localStorage.setItem("oppState_v5_bist", JSON.stringify(oppSt)); }
 
 // ============================================================
 // ŞİŞMİŞLİK SKORU (Overbought / Aşırı-Alım Tespiti)
@@ -1048,36 +1048,36 @@ function frBadgeHTML(fr) {
 // Hibrit kriterler: hem snapshot (f.*) hem canlı bulk quote (r.*) verisini kullanır.
 // Snapshot olmayan yeni hisseler için canlı veri otomatik fallback olur.
 const CRITERIA = [
-  // Kârlılık (snapshot varsa f.ni, yoksa canlı r.eps)
-  {k:"ni", label:"Kârlı Şirket", tip:"Net kâr pozitif (TTM)",
-    test:(r,f)=>(f.ni!=null && f.ni>0) || (r.eps!=null && r.eps>0)},
-  // Net marj
+  // 1) Kârlı şirket (canlı: pozitif EPS, snapshot fallback: net kâr)
+  {k:"ni", label:"Kârlı Şirket", tip:"EPS veya net kâr pozitif",
+    test:(r,f)=>(r.eps!=null && r.eps>0) || (f.ni!=null && f.ni>0)},
+  // 2) Net marj
   {k:"pm", label:"Net Marj +", tip:"Net kâr marjı pozitif",
     test:(r,f)=>f.pm!=null && f.pm>0},
-  // Faaliyet karlılığı
+  // 3) Faaliyet kârı
   {k:"om", label:"Faaliyet Kârı", tip:"Faaliyet marjı pozitif",
     test:(r,f)=>f.om!=null && f.om>0},
-  // ROE
+  // 4) ROE
   {k:"roe", label:"ROE +", tip:"Özsermaye kârlılığı pozitif",
     test:(r,f)=>f.roe!=null && f.roe>0},
-  // Net Nakit
-  {k:"cash", label:"Net Nakit", tip:"Toplam nakit > toplam borç",
-    test:(r,f)=>f.cash!=null && f.debt!=null && f.cash>f.debt},
-  // Gelir büyümesi
-  {k:"rg", label:"Gelir Büyüyor", tip:"YoY gelir büyümesi pozitif",
-    test:(r,f)=>f.rg!=null && f.rg>0},
-  // Çeyrek kâr büyümesi (snapshot)
+  // 5) Mantıklı F/K
+  {k:"pe", label:"Makul F/K", tip:"F/K pozitif ve 50 altı",
+    test:(r,f)=>{const pe=(r.pe!=null?r.pe:f.pe);return pe!=null && pe>0 && pe<50}},
+  // 6) Yeterli büyüklük (BIST için 1B TL eşiği)
+  {k:"mc", label:"Yeterli Büyüklük", tip:"Piyasa değeri yeterince büyük",
+    test:(r,f)=>{const mc=(r.mc!=null?r.mc:f.mc);return mc!=null && mc>=1_000_000_000}},
+  // 7) Çeyrek kâr büyümesi
   {k:"qeg", label:"Çeyrek Kâr ↑", tip:"Çeyreksel kâr büyümesi pozitif",
     test:(r,f)=>f.qeg!=null && f.qeg>0},
-  // Son çeyrek net kâr (snapshot varsa kontrol et)
-  {k:"qprof", label:"Son Çeyrek +", tip:"En son çeyrekte net kâr pozitif",
-    test:(r,f)=>{const q=(f.qr||[])[0];return q && q.n!=null && q.n>0}},
-  // Likidite (canlı, herkesde var)
-  {k:"liq", label:"Likit", tip:"Günlük hacim 100K üstü ya da hacim/ort hacim ≥ 0.5",
+  // 8) Likidite
+  {k:"liq", label:"Likit", tip:"Günlük hacim yeterli",
     test:(r,f)=>r.v>=100000 || (r.av && r.v >= r.av*0.5)},
-  // 52 hafta pozitif performans (canlı, herkeste var) — eski "trend" kriterinin daha sağlamı
-  {k:"y52", label:"Yıllık Pozitif", tip:"Son 52 haftalık değişim pozitif (hisse uzun vadede yükselmiş)",
+  // 9) 52 hafta pozitif
+  {k:"y52", label:"Yıllık Pozitif", tip:"Son 52 haftalık değişim pozitif",
     test:(r,f)=>r.y52!=null && r.y52>0},
+  // 10) Yakın 52H
+  {k:"near52H", label:"52H Yakın", tip:"Fiyat 52H zirvenin %15 yakınında",
+    test:(r,f)=>r.wh && r.p>=r.wh*0.85},
 ];
 
 function scoreRow(r) {
@@ -1093,7 +1093,7 @@ function scoreRow(r) {
 
 function renderOpps() {
   document.getElementById("oppMinScoreLbl").textContent = oppSt.minScore + "/10";
-  document.getElementById("oppMaxPxLbl").textContent = oppSt.maxPx >= 200 ? "∞" : "$" + oppSt.maxPx.toFixed(2);
+  document.getElementById("oppMaxPxLbl").textContent = oppSt.maxPx >= 100000 ? "∞" : "₺" + oppSt.maxPx.toFixed(0);
   const obLblEl = document.getElementById("oppMaxObLbl");
   if (obLblEl) {
     const lbl = oppSt.maxOb >= 4 ? "4/4 (hepsi)" :
